@@ -140,6 +140,18 @@ export default function App() {
   const [isWatermarkPanelOpen, setIsWatermarkPanelOpen] = useState(false);
   const [isToolsPanelOpen, setIsToolsPanelOpen] = useState(false);
   const [uploadImage, setUploadImage] = useState<string | null>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<'default' | 'custom' | 'missing'>('default');
+
+  useEffect(() => {
+    const customKey = import.meta.env.VITE_CUSTOM_API_KEY;
+    if (customKey && customKey.trim() !== '') {
+      setApiKeyStatus('custom');
+    } else if (!process.env.GEMINI_API_KEY) {
+      setApiKeyStatus('missing');
+    } else {
+      setApiKeyStatus('default');
+    }
+  }, []);
   
   // Watermark State
   const [watermark, setWatermark] = useState<WatermarkConfig>({
@@ -163,7 +175,9 @@ export default function App() {
     
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      const customKey = import.meta.env.VITE_CUSTOM_API_KEY;
+      const apiKey = customKey || process.env.GEMINI_API_KEY || '';
+      const ai = new GoogleGenAI({ apiKey });
       
       let finalPrompt = activePrompt;
       
@@ -214,9 +228,20 @@ export default function App() {
           break;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed:", error);
-      alert("Failed to generate image. Please check your API key or try again.");
+      let errorMessage = "Failed to generate image. Please try again.";
+      
+      if (error.message?.includes('API key not valid')) {
+        errorMessage = "The API key provided is invalid. Please check your Secret 'VITE_CUSTOM_API_KEY'.";
+        if (import.meta.env.VITE_CUSTOM_API_KEY?.startsWith('sk-')) {
+          errorMessage += " (Note: Your key looks like an OpenAI key, but this app uses Google Gemini)";
+        }
+      } else if (error.message?.includes('quota')) {
+        errorMessage = "API quota exceeded. Please try again later or use a different key.";
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -393,6 +418,12 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-4">
+            {apiKeyStatus === 'custom' && (
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Custom Key Active</span>
+              </div>
+            )}
             <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
               <History size={20} />
             </button>
